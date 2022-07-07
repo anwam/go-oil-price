@@ -1,12 +1,14 @@
 package main
 
 import (
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
+
+	"github.com/labstack/echo/v4"
 )
 
 type OilPriceResponse struct {
@@ -37,6 +39,31 @@ type PTTORDS struct {
 }
 
 func main() {
+	e := echo.New()
+	e.GET("/", func(c echo.Context) error {
+		return c.String(http.StatusOK, "Hi!")
+	})
+	e.GET("/oil-price", func(c echo.Context) error {
+		oilPrice := fetchOilPrice()
+		if oilPrice != nil {
+			return c.JSON(http.StatusOK, map[string]interface{}{
+				"data":  oilPrice,
+				"error": nil,
+			})
+		}
+		return c.JSON(http.StatusOK, map[string]interface{}{
+			"data":  nil,
+			"error": nil,
+		})
+	})
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "3000"
+	}
+	e.Start(":" + port)
+}
+
+func fetchOilPrice() *PTTORDS {
 	url := "https://orapiweb.pttor.com/oilservice/OilPrice.asmx"
 	method := "POST"
 
@@ -54,30 +81,26 @@ func main() {
 
 	if err != nil {
 		fmt.Println(err)
-		return
+		return nil
 	}
 	req.Header.Add("Content-Type", "application/soap+xml; charset=utf-8")
 
 	res, err := client.Do(req)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return nil
 	}
 	defer res.Body.Close()
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return nil
 	}
 
 	resp := OilPriceResponse{}
 	xml.Unmarshal(body, &resp)
 	detail := PTTORDS{}
 	xml.Unmarshal([]byte(resp.Body.CurrentOilPriceResponse.CurrentOilPriceResult), &detail)
-	for _, fuel := range detail.FUEL {
-		fmt.Println(fuel.PRICEDATE, fuel.PRODUCT, fuel.PRICE)
-	}
-	jsonString, _ := json.Marshal(&detail)
-	fmt.Println(string(jsonString))
+	return &detail
 }
