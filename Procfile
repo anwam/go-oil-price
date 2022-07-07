@@ -1,1 +1,1 @@
-web: bin/ptt-oil-price
+web: bin/oilprice
